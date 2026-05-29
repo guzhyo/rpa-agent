@@ -2518,7 +2518,9 @@ class RPAGUI:
                     build(bid, step['body'], body_path)
 
                 elif t == '子流程':
-                    sub_name = p.get('sub_name', '') or f"子流程{i + 1}"
+                    # 计算是第几个子流程节点
+                    sub_count = sum(1 for s in lst[:i] if s.get('type') == '子流程') + 1
+                    sub_name = p.get('sub_name', '') or f"子流程{sub_count}"
                     body_path = container_path.copy()
                     body_path.append(f"sub_{i}_body")
                     is_body_open = ",".join(body_path) in expanded_containers
@@ -3058,25 +3060,35 @@ class RPAGUI:
                     break
 
             if insert_info:
-                # 如果选中步骤的子流程列表（非 self.data），向上溯源
-                if insert_info['list'] is not self.data:
-                    # 在 self.data 中找到包含该子流程的父级步骤
-                    parent_idx = -1
-                    for i, step in enumerate(self.data):
-                        if (step.get('true') is insert_info['list']
-                                or step.get('false') is insert_info['list']
-                                or step.get('body') is insert_info['list']):
-                            parent_idx = i
+                lst = insert_info['list']
+                # 如果选中的步骤在子流程的 body 中，直接插入到 body 末尾
+                if lst is not self.data:
+                    # 判断是否是子流程的 body
+                    is_sub_body = False
+                    for step in self.data:
+                        parent_type = step.get('type', '')
+                        body = step.get('body')
+                        if body is lst and parent_type == '子流程':
+                            is_sub_body = True
                             break
-                    if parent_idx >= 0:
-                        lst = self.data
-                        idx = parent_idx + 1
+                    if is_sub_body:
+                        idx = len(lst)
                     else:
-                        # 溯源失败，追加到末尾
-                        lst = self.data
-                        idx = len(self.data)
+                        # 在 self.data 中找到包含该子流程的父级步骤（如条件分支/循环）
+                        parent_idx = -1
+                        for i, step in enumerate(self.data):
+                            if (step.get('true') is lst
+                                    or step.get('false') is lst
+                                    or step.get('body') is lst):
+                                parent_idx = i
+                                break
+                        if parent_idx >= 0:
+                            lst = self.data
+                            idx = parent_idx + 1
+                        else:
+                            lst = self.data
+                            idx = len(self.data)
                 else:
-                    lst = self.data
                     idx = insert_info['index'] + 1
             else:
                 lst = self.data
