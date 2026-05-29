@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+截图/
+*.json
+!config.json.example
+
+# Logs
+*.log
+
+# Debug / temp files
+debug_screenshot.png
+test_fix*.txt
+
+# Reference code (not part of this project)
+其它程序参考代码/
+
+# Unnamed / scratch
+未命名/
+
+# RPA runtime
+rpa_run.log

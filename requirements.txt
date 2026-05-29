@@ -1,0 +1,21 @@
+# RPA自动化工具依赖库
+# 安装命令: pip install -r requirements.txt
+
+# 图像处理
+Pillow>=9.0.0
+opencv-python>=4.5.0
+numpy>=1.21.0
+
+# 数据处理和文件读取
+pandas>=1.3.0
+openpyxl>=3.0.0  # 用于读取 Excel 文件
+
+# HTTP请求
+requests>=2.25.0
+
+# UI组件
+tkcalendar>=1.0.0  # 日期选择控件
+
+# 其他工具
+pywin32>=227; platform_system=="Windows"
+keyboard>=0.13.5
