@@ -2446,7 +2446,8 @@ class RPAGUI:
                 elif t == '延时':
                     desc = f"{p.get('seconds', 1)}秒"
                 elif t == '子流程':
-                    desc = f"\U0001f4c1 {p.get('sub_name', '') or f'子流程{i + 1}'}"
+                    sub_count = sum(1 for s in lst[:i] if s.get('type') == '子流程') + 1
+                    desc = f"\U0001f4c1 {p.get('sub_name', '') or f'子流程{sub_count}'}"
 
                 step_path = current_path.copy()
                 step_path.append(f"step_{i}")
