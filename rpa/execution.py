@@ -515,6 +515,9 @@ class ExecutionEngine(threading.Thread):
         elif t == 'AI 决策':
             self._exec_ai_decision(p)
 
+        elif t == '子流程':
+            self._exec_sub_process(step)
+
     def _exec_delay(self, p: Dict[str, Any]) -> None:
         """执行延时节点。"""
         time.sleep(float(p.get('seconds', 1)))
@@ -2004,3 +2007,12 @@ class ExecutionEngine(threading.Thread):
         except Exception as e:
             self.log(f"\u274c AI 决策异常: {e}")
             self.log(f"   错误详情: {traceback.format_exc()}")
+
+    def _exec_sub_process(self, step: Dict[str, Any]) -> None:
+        """执行子流程节点：按顺序执行 body 中的步骤。"""
+        p = step.get('params', {})
+        sub_name = p.get('sub_name', '') or '子流程'
+        body = step.get('body', [])
+        self.log(f"\U0001f4c1 进入子流程: {sub_name}（共 {len(body)} 步）")
+        self._dispatch_steps(body)
+        self.log(f"\U0001f4c1 子流程完成: {sub_name}")

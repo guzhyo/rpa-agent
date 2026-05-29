@@ -2319,6 +2319,15 @@ class RPAGUI:
             # 超时
             add_row("超时(秒):", "ai_timeout", default=str(AI_DEFAULT_TIMEOUT), parent=node_frame)
 
+        elif t == "子流程":
+            node_frame = tk.LabelFrame(
+                self.frm_params, text="节点配置", padx=5, pady=5)
+            node_frame.pack(fill=tk.X, pady=5)
+            add_row("子流程名称:", "sub_name", default="", parent=node_frame)
+            tk.Label(
+                node_frame, text="在子流程节点下方添加步骤", fg="blue"
+            ).pack(pady=(10, 0))
+
     # 流程树管理
     def refresh_tree(self) -> None:
         """刷新流程树视图。"""
@@ -2361,6 +2370,9 @@ class RPAGUI:
                         elif parent_info['data']['type'] == '数据循环':
                             node_path.append(
                                 f"dataloop_{parent_info['index']}_body")
+                        elif parent_info['data']['type'] == '子流程':
+                            node_path.append(
+                                f"sub_{parent_info['index']}_body")
             else:
                 node_path.append("root")
 
@@ -2496,6 +2508,20 @@ class RPAGUI:
                     is_body_open = ",".join(body_path) in expanded_containers
                     bid = self.tree.insert(
                         iid, "end", text="\U0001f504 Body",
+                        open=is_body_open, tags=('folder',))
+                    self.tree_map[bid] = {
+                        "list": step.setdefault('body', []),
+                        "type": "container",
+                    }
+                    build(bid, step['body'], body_path)
+
+                elif t == '子流程':
+                    sub_name = p.get('sub_name', '') or f"子流程{i + 1}"
+                    body_path = container_path.copy()
+                    body_path.append(f"sub_{i}_body")
+                    is_body_open = ",".join(body_path) in expanded_containers
+                    bid = self.tree.insert(
+                        iid, "end", text=f"\U0001f4c1 {sub_name}",
                         open=is_body_open, tags=('folder',))
                     self.tree_map[bid] = {
                         "list": step.setdefault('body', []),
@@ -2835,6 +2861,8 @@ class RPAGUI:
         elif t == '普通循环':
             s['body'] = []
         elif t == '数据循环':
+            s['body'] = []
+        elif t == '子流程':
             s['body'] = []
 
         self._save_undo_snapshot()
