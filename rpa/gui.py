@@ -111,9 +111,9 @@ class RPAGUI:
         self._undo_stack: List[List[Dict[str, Any]]] = []  # 撤销历史栈
         self._redo_stack: List[List[Dict[str, Any]]] = []  # 重做历史栈
         self._max_undo = 20  # 最大撤销次数
+        self._drag_start_pos: Optional[Tuple[int, int]] = None  # 拖拽起始位置
         self._editing_step_data: Optional[Dict[str, Any]] = None  # 当前编辑的步骤数据
         self._modified: bool = False  # 是否有未保存的修改
-
         self.global_step_counter = 1
         self.mouse_position: Tuple[int, int] = (0, 0)
         self.drag_feedback_item: Optional[str] = None
@@ -2548,6 +2548,7 @@ class RPAGUI:
             info = self.tree_map.get(item)
             if info and info.get('type') == 'step':
                 self.drag_data = {"item": item, "x": e.x_root, "y": e.y_root}
+                self._drag_start_pos = (e.x_root, e.y_root)
                 self.tree.selection_set(item)
             else:
                 self.drag_data = None
@@ -2675,6 +2676,15 @@ class RPAGUI:
         if not target_id or source_id == target_id:
             # 没有实际拖拽（点击展开/选中时也会触发），不刷新树
             return
+
+        # 检查是否实际移动了鼠标（避免点击误触）
+        if self._drag_start_pos:
+            dx = abs(e.x_root - self._drag_start_pos[0])
+            dy = abs(e.y_root - self._drag_start_pos[1])
+            if dx < 5 and dy < 5:
+                self._drag_start_pos = None
+                return
+        self._drag_start_pos = None
 
         # 检查是否拖拽到自己的子项目中
         parent = target_id
