@@ -3016,9 +3016,30 @@ class RPAGUI:
 
     def cut_steps(self) -> None:
         """剪切选中的步骤到剪贴板（复制后删除）。"""
+        self._save_undo_snapshot()
+        selection_before = self.tree.selection()
         self.copy_steps()
         if self.clipboard:
-            self.delete_step()
+            # 直接删除选中的步骤，不弹确认对话框
+            step_items = []
+            for item_id in selection_before:
+                info = self.tree_map.get(item_id)
+                if info and info['type'] == 'step':
+                    step_items.append(item_id)
+            if not step_items:
+                return
+            to_delete = []
+            for item_id in step_items:
+                info = self.tree_map[item_id]
+                lst = info['list']
+                step = info['data']
+                if step in lst:
+                    to_delete.append((lst, step))
+            for lst, step in to_delete:
+                lst.remove(step)
+            self.refresh_tree()
+            self.lbl_status.config(
+                text=f"已剪切 {len(self.clipboard)} 个步骤", fg="blue")
 
     @staticmethod
     def _regenerate_ids(step_list: List[Dict[str, Any]]) -> None:
