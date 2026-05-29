@@ -3058,6 +3058,13 @@ class RPAGUI:
 
     def paste_steps(self) -> None:
         """粘贴剪贴板中的步骤，插入到选中步骤之后，ID 自动重编。
+
+        粘贴规则：
+        - 选中主流程步骤 → 插入到该步骤后面
+        - 选中子流程容器 → 追加到子流程 body 末尾
+        - 选中子流程中的步骤 → 插入到该步骤后面（子流程 body 内）
+        - 选中条件分支/循环中的步骤 → 溯源到主流程父级之后
+        - 没选中 → 追加到 self.data 末尾
         """
         self._save_undo_snapshot()
         if not self.clipboard:
@@ -3068,45 +3075,52 @@ class RPAGUI:
         pasted = copy.deepcopy(self.clipboard)
         self._regenerate_ids(pasted)
 
-        # 确定插入位置：始终以主流程 self.data 为目标
-        # 如果选中的步骤在子流程中，追溯到主流程的父级步骤之后插入
         sel = self.tree.selection()
+        lst = self.data
+        idx = len(self.data)
+
         if sel:
-            # 找到最后一个有效选中项（支持 step 和 container 类型）
-            insert_info = None
+            target_info = None
             for item_id in reversed(sel):
                 info = self.tree_map.get(item_id)
                 if info:
-                    # step 类型直接用，container 类型也支持（子流程容器）
-                    if info.get('type') == 'step':
-                        insert_info = info
-                        break
-                    elif info.get('type') == 'container':
-                        # 容器节点：使用其 list 并在末尾插入
-                        insert_info = info
-                        break
+                    target_info = info
+                    break
 
-            if insert_info:
-                lst = insert_info['list']
-                # 如果选中的步骤在子流程的 body 中，直接插入到 body 末尾
-                if lst is not self.data:
+            if target_info:
+                info_type = target_info.get('type')
+                target_lst = target_info['list']
+
+                if info_type == 'container':
+                    # 容器节点（子流程的 📁 容器）→ 追加到容器末尾
+                    lst = target_lst
+                    idx = len(lst)
+
+                elif target_lst is self.data:
+                    # 主流程中的步骤 → 插入到该步骤后面
+                    lst = self.data
+                    idx = target_info['index'] + 1
+
+                else:
+                    # 子流程/条件分支/循环中的步骤
                     # 判断是否是子流程的 body
                     is_sub_body = False
-                    for step in self.data:
-                        parent_type = step.get('type', '')
-                        body = step.get('body')
-                        if body is lst and parent_type == '子流程':
+                    for s in self.data:
+                        if s.get('body') is target_lst and s.get('type') == '子流程':
                             is_sub_body = True
                             break
+
                     if is_sub_body:
-                        idx = len(lst)
+                        # 子流程 body 中的步骤 → 插入到该步骤后面
+                        lst = target_lst
+                        idx = target_info['index'] + 1
                     else:
-                        # 在 self.data 中找到包含该子流程的父级步骤（如条件分支/循环）
+                        # 条件分支/循环中的步骤 → 溯源到主流程父级之后
                         parent_idx = -1
-                        for i, step in enumerate(self.data):
-                            if (step.get('true') is lst
-                                    or step.get('false') is lst
-                                    or step.get('body') is lst):
+                        for i, s in enumerate(self.data):
+                            if (s.get('true') is target_lst
+                                    or s.get('false') is target_lst
+                                    or s.get('body') is target_lst):
                                 parent_idx = i
                                 break
                         if parent_idx >= 0:
@@ -3115,14 +3129,6 @@ class RPAGUI:
                         else:
                             lst = self.data
                             idx = len(self.data)
-                else:
-                    idx = insert_info['index'] + 1
-            else:
-                lst = self.data
-                idx = len(self.data)
-        else:
-            lst = self.data
-            idx = len(self.data)
 
         # 批量插入
         for i, step in enumerate(pasted):
