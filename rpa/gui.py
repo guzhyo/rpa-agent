@@ -2445,6 +2445,8 @@ class RPAGUI:
                         desc += f" @{p['pos_var']}"
                 elif t == '延时':
                     desc = f"{p.get('seconds', 1)}秒"
+                elif t == '子流程':
+                    desc = f"\U0001f4c1 {p.get('sub_name', '') or f'子流程{i + 1}'}"
 
                 step_path = current_path.copy()
                 step_path.append(f"step_{i}")
@@ -2519,15 +2521,12 @@ class RPAGUI:
                     sub_name = p.get('sub_name', '') or f"子流程{i + 1}"
                     body_path = container_path.copy()
                     body_path.append(f"sub_{i}_body")
-                    is_body_open = ",".join(body_path) in expanded_containers
-                    bid = self.tree.insert(
-                        iid, "end", text=f"\U0001f4c1 {sub_name}",
-                        open=is_body_open, tags=('folder',))
-                    self.tree_map[bid] = {
-                        "list": step.setdefault('body', []),
-                        "type": "container",
-                    }
-                    build(bid, step['body'], body_path)
+                    is_sub_open = ",".join(body_path) in expanded_containers
+                    # 子流程节点自身展开时为打开状态，子步骤直接挂在节点下
+                    self.tree.item(iid, open=is_sub_open)
+                    # 子步骤直接挂在子流程节点下，不需要中间容器
+                    step.setdefault('body', [])
+                    build(iid, step['body'], body_path)
 
         build("", self.data)
 
