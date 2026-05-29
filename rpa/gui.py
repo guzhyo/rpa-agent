@@ -2521,12 +2521,15 @@ class RPAGUI:
                     sub_name = p.get('sub_name', '') or f"子流程{i + 1}"
                     body_path = container_path.copy()
                     body_path.append(f"sub_{i}_body")
-                    # 子步骤直接挂在子流程节点下，不需要中间容器
-                    step.setdefault('body', [])
-                    build(iid, step['body'], body_path)
-                    # 展开状态在子节点插入后设置
-                    is_sub_open = ",".join(body_path) in expanded_containers
-                    self.tree.item(iid, open=is_sub_open)
+                    is_body_open = ",".join(body_path) in expanded_containers
+                    bid = self.tree.insert(
+                        iid, "end", text=f"\U0001f4c1 {sub_name}",
+                        open=is_body_open, tags=('folder',))
+                    self.tree_map[bid] = {
+                        "list": step.setdefault('body', []),
+                        "type": "container",
+                    }
+                    build(bid, step['body'], body_path)
 
         build("", self.data)
 
