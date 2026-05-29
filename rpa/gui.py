@@ -3052,13 +3052,19 @@ class RPAGUI:
         # 如果选中的步骤在子流程中，追溯到主流程的父级步骤之后插入
         sel = self.tree.selection()
         if sel:
-            # 找到最后一个有效 step 选中项
+            # 找到最后一个有效选中项（支持 step 和 container 类型）
             insert_info = None
             for item_id in reversed(sel):
                 info = self.tree_map.get(item_id)
-                if info and info.get('type') == 'step':
-                    insert_info = info
-                    break
+                if info:
+                    # step 类型直接用，container 类型也支持（子流程容器）
+                    if info.get('type') == 'step':
+                        insert_info = info
+                        break
+                    elif info.get('type') == 'container':
+                        # 容器节点：使用其 list 并在末尾插入
+                        insert_info = info
+                        break
 
             if insert_info:
                 lst = insert_info['list']
