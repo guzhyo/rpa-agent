@@ -52,6 +52,7 @@ from rpa.config import (
     DATA_FILE_CACHE_TTL,
     OCR_DEFAULT_URL,
     THREAD_ERROR_RECOVERY_DELAY, THREAD_RECOVERY_DELAY,
+    AI_DEFAULT_API_URL, AI_DEFAULT_MODEL, AI_DEFAULT_TIMEOUT,
 )
 
 from rpa.utils import image_pool
@@ -2283,6 +2284,41 @@ class RPAGUI:
 
             var.trace_add("write", check_label_exists)
 
+        elif t == "AI 决策":
+            node_frame = tk.LabelFrame(
+                self.frm_params, text="节点配置", padx=5, pady=5)
+            node_frame.pack(fill=tk.X, pady=5)
+
+            # 输入模式
+            add_combo("输入模式:", "ai_mode", ["图片识别", "文本语义"], parent=node_frame)
+
+            # API 配置
+            api_frame = tk.LabelFrame(node_frame, text="API 配置", padx=5, pady=5)
+            api_frame.pack(fill=tk.X, pady=5)
+            add_row("API 地址:", "ai_api_url", default=AI_DEFAULT_API_URL, parent=api_frame)
+            add_row("模型名称:", "ai_model", default=AI_DEFAULT_MODEL, parent=api_frame)
+            add_row("API Key:", "ai_api_key", default="", parent=api_frame)
+
+            # 提示词
+            prompt_frame = tk.LabelFrame(node_frame, text="提示词", padx=5, pady=5)
+            prompt_frame.pack(fill=tk.X, pady=5)
+            tk.Label(prompt_frame, text="告诉 AI 要做什么判断：", anchor=tk.W).pack(fill=tk.X)
+            prompt_text = tk.Text(prompt_frame, height=6, width=40)
+            prompt_text.pack(fill=tk.X, pady=5)
+            self.param_vars['ai_system_prompt'] = prompt_text
+
+            # 文本来源（文本语义模式专用）
+            add_row("文本来源:", "ai_text_source", default="", parent=node_frame)
+
+            # 截图来源（图片识别模式专用）
+            add_row("截图区域:", "ai_screenshot_region", default="", parent=node_frame)
+
+            # 输出变量
+            add_row("结果保存到变量:", "ai_output_var", default="", parent=node_frame)
+
+            # 超时
+            add_row("超时(秒):", "ai_timeout", default=str(AI_DEFAULT_TIMEOUT), parent=node_frame)
+
     # 流程树管理
     def refresh_tree(self) -> None:
         """刷新流程树视图。"""
@@ -2703,8 +2739,17 @@ class RPAGUI:
                     v.set(bool(p[k]))
                 elif k == 'variables':
                     pass  # 变量在 UI 中已加载
+                elif isinstance(v, tk.Text):
+                    try:
+                        v.delete("1.0", tk.END)
+                        v.insert("1.0", str(p[k]))
+                    except Exception:
+                        pass
                 else:
+                    try:
                         v.set(p[k])
+                    except Exception:
+                        pass
 
     def add_step(self) -> None:
         """添加新步骤。"""
@@ -2774,6 +2819,14 @@ class RPAGUI:
                     return
             p['target_label'] = target_label
 
+        # AI 决策节点：将 Text 控件内容转为字符串
+        if t == 'AI 决策' and 'ai_system_prompt' in self.param_vars:
+            prompt_widget = self.param_vars['ai_system_prompt']
+            try:
+                p['ai_system_prompt'] = prompt_widget.get("1.0", "end-1c")
+            except Exception:
+                p['ai_system_prompt'] = str(prompt_widget) if prompt_widget else ""
+
         s: Dict[str, Any] = {
             "id": str(uuid.uuid4()), "type": t, "params": p}
         if t == '条件分支':
@@ -2829,6 +2882,14 @@ class RPAGUI:
                                 'value': var_row['value_var'].get(),
                             })
                 p['variables'] = variables_data
+
+            # AI 决策节点：将 Text 控件内容转为字符串
+            if t == 'AI 决策' and 'ai_system_prompt' in self.param_vars:
+                prompt_widget = self.param_vars['ai_system_prompt']
+                try:
+                    p['ai_system_prompt'] = prompt_widget.get("1.0", "end-1c")
+                except Exception:
+                    p['ai_system_prompt'] = str(prompt_widget) if prompt_widget else ""
 
             info['data']['params'] = p
             self.refresh_tree()

@@ -41,6 +41,7 @@ from rpa.config import (
     WAIT_RETRY_INTERVAL, WINDOW_POLL_INTERVAL, DIALOG_POLL_INTERVAL,
     OCR_ERROR_RETRY_DELAY,
     BG_WINDOW_RETRY_INTERVAL, BG_WINDOW_RETRY_COUNT,
+    AI_DEFAULT_API_URL, AI_DEFAULT_MODEL, AI_DEFAULT_TIMEOUT,
 )
 
 from rpa.utils import StopException, logger
@@ -510,6 +511,9 @@ class ExecutionEngine(threading.Thread):
 
         elif t == '变量管理':
             self._exec_var_manager(p)
+
+        elif t == 'AI 决策':
+            self._exec_ai_decision(p)
 
     def _exec_delay(self, p: Dict[str, Any]) -> None:
         """执行延时节点。"""
@@ -1878,4 +1882,125 @@ class ExecutionEngine(threading.Thread):
         except Exception as e:
             self.log(f"\u274c 变量计算节点错误：{e}")
             self.log(f"   表达式: {expression}")
+            self.log(f"   错误详情: {traceback.format_exc()}")
+
+    def _exec_ai_decision(self, p: Dict[str, Any]) -> None:
+        """执行 AI 决策节点。"""
+        mode = p.get('ai_mode', '图片识别')
+        api_url = p.get('ai_api_url', AI_DEFAULT_API_URL)
+        model = p.get('ai_model', AI_DEFAULT_MODEL)
+        api_key = p.get('ai_api_key', '')
+        output_var = p.get('ai_output_var', '')
+        timeout = int(p.get('ai_timeout', AI_DEFAULT_TIMEOUT))
+
+        # 读取提示词
+        system_prompt = ""
+        prompt_widget = p.get('ai_system_prompt')
+        if prompt_widget:
+            try:
+                system_prompt = prompt_widget.get("1.0", "end-1c").strip()
+            except Exception:
+                system_prompt = str(prompt_widget) if prompt_widget else ""
+
+        if not system_prompt:
+            self.log("\u26a0\ufe0f AI 决策节点：提示词为空")
+            return
+
+        self.log(f"\U0001f916 AI 决策开始（模式: {mode}）")
+
+        try:
+            import requests
+            import base64
+            import io
+            import json
+
+            if mode == "图片识别":
+                # 截图
+                region_str = p.get('ai_screenshot_region', '')
+                region = None
+                if region_str:
+                    try:
+                        parts = [int(x.strip()) for x in region_str.split(',')]
+                        if len(parts) == 4:
+                            region = parts
+                    except ValueError:
+                        pass
+
+                hwnd = self.runtime_bg_hwnd
+                if hwnd:
+                    from rpa.win_driver import WinDriver as _WD
+                    import cv2
+                    import numpy as np
+                    from PIL import Image
+                    scr_np = _WD.capture_window(hwnd, tuple(region) if region else None)
+                    if scr_np is not None:
+                        scr_pil = Image.fromarray(
+                            cv2.cvtColor(scr_np, cv2.COLOR_BGR2RGB))
+                    else:
+                        import pyautogui
+                        scr_pil = pyautogui.screenshot(
+                            region=tuple(region) if region else None)
+                else:
+                    import pyautogui
+                    scr_pil = pyautogui.screenshot(
+                        region=tuple(region) if region else None)
+
+                buf = io.BytesIO()
+                scr_pil.save(buf, format="PNG")
+                b64 = base64.b64encode(buf.getvalue()).decode()
+
+                content = [
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
+                    {"type": "text", "text": system_prompt},
+                ]
+                messages = [{"role": "user", "content": content}]
+                self.log(f"\U0001f5bc\ufe0f 已截图 ({scr_pil.width}x{scr_pil.height})")
+            else:
+                text_source = p.get('ai_text_source', '')
+                input_text = self.runtime_vars.get(text_source, text_source)
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": str(input_text)},
+                ]
+                self.log(f"\U0001f4dd 输入文本: {str(input_text)[:100]}")
+
+            headers = {"Content-Type": "application/json"}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+
+            body = {
+                "messages": messages,
+                "max_tokens": 1024,
+                "temperature": 0.3,
+            }
+            if model:
+                body["model"] = model
+
+            self.log(f"\U0001f310 调用 AI API: {api_url}")
+            resp = requests.post(
+                api_url, headers=headers, json=body, timeout=timeout)
+            resp.raise_for_status()
+            result = resp.json()
+
+            reply = ""
+            try:
+                reply = result["choices"][0]["message"]["content"]
+            except (KeyError, IndexError):
+                reply = str(result)
+
+            if output_var:
+                self.runtime_vars[output_var] = reply
+                self.log(f"\U0001f4e6 AI 结果已保存到变量: {output_var}")
+
+            preview = reply[:200] + "..." if len(reply) > 200 else reply
+            self.log(f"\u2705 AI 决策完成: {preview}")
+
+        except ImportError as e:
+            self.log(f"\u274c AI 决策节点错误：缺少必要库 - {e}")
+        except requests.exceptions.Timeout:
+            self.log(f"\u23f0 AI 决策超时（{timeout}秒）")
+        except requests.exceptions.ConnectionError:
+            self.log(f"\u274c AI 决策连接失败: 无法连接到 {api_url}")
+        except Exception as e:
+            self.log(f"\u274c AI 决策异常: {e}")
             self.log(f"   错误详情: {traceback.format_exc()}")
