@@ -215,15 +215,6 @@ class RPAGUI:
         self.txt_log.see(tk.END)
         self._write_log(msg)
 
-    @staticmethod
-    def _on_tree_scroll(event: tk.Event) -> None:
-        """鼠标滚轮滚动流程树。"""
-        try:
-            widget = event.widget
-            widget.yview_scroll(int(-1 * (event.delta / 120)), "units")
-        except Exception:
-            pass
-
     # UI 构建
     def setup_ui(self) -> None:
         """构建主界面布局。"""
@@ -274,10 +265,6 @@ class RPAGUI:
         self.tree.column("#0", width=100)
         self.tree.column("desc", width=300)
         self.tree.column("var", width=80)
-
-        # 鼠标滚轮滚动支持
-        self.tree.bind("<Enter>", lambda e: self.tree.bind_all("<MouseWheel>", self._on_tree_scroll))
-        self.tree.bind("<Leave>", lambda e: self.tree.unbind_all("<MouseWheel>"))
 
         ysb = ttk.Scrollbar(
             tree_frame, orient=tk.VERTICAL, command=self.tree.yview)
