@@ -295,7 +295,6 @@ class RPAGUI:
         self.tree.bind("<Control-c>", lambda e: self.copy_steps())
         self.tree.bind("<Control-v>", lambda e: self.paste_steps())
         # 撤销快捷键
-        self.tree.bind("<Control-z>", lambda e: self.undo())
         self.root.bind("<Control-z>", lambda e: self.undo())
         # 右键菜单
         self.tree.bind("<Button-3>", self.on_tree_right_click)
