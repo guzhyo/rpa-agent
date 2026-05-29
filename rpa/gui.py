@@ -2533,7 +2533,6 @@ class RPAGUI:
 
         build("", self.data)
 
-    # 拖拽排序
     def on_drag_start(self, e: tk.Event) -> None:
         """拖拽开始。"""
         item = self.tree.identify_row(e.y)
@@ -2542,10 +2541,11 @@ class RPAGUI:
         if multi_select:
             self.drag_data = None
             return
+
         if item:
             info = self.tree_map.get(item)
             if info and info.get('type') == 'step':
-                self.drag_data = {"item": item}
+                self.drag_data = {"item": item, "x": e.x_root, "y": e.y_root}
                 self.tree.selection_set(item)
             else:
                 self.drag_data = None
@@ -2671,8 +2671,7 @@ class RPAGUI:
         self.drag_data = None
 
         if not target_id or source_id == target_id:
-            self._save_undo_snapshot()
-            self.refresh_tree()
+            # 没有实际拖拽（点击展开/选中时也会触发），不刷新树
             return
 
         # 检查是否拖拽到自己的子项目中
