@@ -113,6 +113,7 @@ class RPAGUI:
         self._max_undo = 20  # 最大撤销次数
         self._drag_start_pos: Optional[Tuple[int, int]] = None  # 拖拽起始位置
         self._drag_enabled: bool = False  # 是否处于双击后的可拖拽状态
+        self._drag_arm_timer: Optional[str] = None  # 长按定时器
         self._editing_step_data: Optional[Dict[str, Any]] = None  # 当前编辑的步骤数据
         self._modified: bool = False  # 是否有未保存的修改
         self.global_step_counter = 1
@@ -287,10 +288,9 @@ class RPAGUI:
             font=('Arial', 9, 'italic'))
 
         self.tree.bind("<<TreeviewSelect>>", self.on_tree_select)
-        self.tree.bind("<Double-1>", self.on_drag_arm)
-        self.tree.bind("<ButtonPress-1>", self.on_drag_start)
-        self.tree.bind("<B1-Motion>", self.on_drag_motion)
+        self.tree.bind("<ButtonPress-1>", self.on_drag_arm)
         self.tree.bind("<ButtonRelease-1>", self.on_drag_release)
+        self.tree.bind("<B1-Motion>", self.on_drag_motion)
         self.tree.bind("<Leave>", self.on_tree_leave)
         self.tree.bind("<Delete>", lambda e: self.delete_step())
         # 复制粘贴快捷键
@@ -2540,15 +2540,29 @@ class RPAGUI:
 
     # 拖拽排序
     def on_drag_arm(self, e: tk.Event) -> None:
-        """双击步骤后武装拖拽模式，显示虚框提示可以拖动。"""
+        """长按步骤后进入拖拽模式。
+
+        按下时启动 500ms 定时器，如果 500ms 内没有释放则进入武装状态，
+        否则视为普通点击选中。
+        """
         item = self.tree.identify_row(e.y)
-        if item:
-            info = self.tree_map.get(item)
-            if info and info.get('type') == 'step':
-                self._drag_enabled = True
-                self.tree.item(item, tags=('drag_source',))
-                self.lbl_status.config(
-                    text="\U0001f447 步骤已就绪，按住左键拖动排序", fg="orange")
+        if not item:
+            return
+        info = self.tree_map.get(item)
+        if not info or info.get('type') != 'step':
+            return
+
+        self._drag_arm_timer = self.win.after(500, self._activate_drag, item, e.x_root, e.y_root)
+
+    def _activate_drag(self, item: str, x_root: int, y_root: int) -> None:
+        """触发长按拖拽武装。"""
+        self._drag_enabled = True
+        self.drag_data = {"item": item, "x": x_root, "y": y_root}
+        self._drag_start_pos = (x_root, y_root)
+        self.tree.selection_set(item)
+        self.tree.item(item, tags=('drag_source',))
+        self.lbl_status.config(
+            text="\U0001f447 拖动排序中...", fg="orange")
 
     def on_tree_leave(self, e: tk.Event) -> None:
         """鼠标离开树时取消拖拽武装。"""
@@ -2680,8 +2694,21 @@ class RPAGUI:
                 self.drag_highlight_items = []
 
     def on_drag_release(self, e: tk.Event) -> None:
-        """拖拽释放。"""
-        if not self.drag_data:
+        """拖拽释放。
+
+        如果定时器还在（短按），取消定时器作为普通点击处理。
+        如果已进入拖拽模式，执行拖拽释放逻辑。
+        """
+        # 取消长按定时器（短按时取消，长按时定时器已触发不影响）
+        if hasattr(self, '_drag_arm_timer'):
+            try:
+                self.win.after_cancel(self._drag_arm_timer)
+            except Exception:
+                pass
+            self._drag_arm_timer = None
+
+        # 如果还没进入拖拽模式（短按释放），当作普通点击，不处理
+        if not self._drag_enabled or not self.drag_data:
             return
 
         source_id = self.drag_data["item"]
