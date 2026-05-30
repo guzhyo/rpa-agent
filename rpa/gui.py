@@ -112,6 +112,7 @@ class RPAGUI:
         self._redo_stack: List[List[Dict[str, Any]]] = []  # 重做历史栈
         self._max_undo = 20  # 最大撤销次数
         self._drag_start_pos: Optional[Tuple[int, int]] = None  # 拖拽起始位置
+        self._drag_enabled: bool = False  # 是否处于双击后的可拖拽状态
         self._editing_step_data: Optional[Dict[str, Any]] = None  # 当前编辑的步骤数据
         self._modified: bool = False  # 是否有未保存的修改
         self.global_step_counter = 1
@@ -286,9 +287,11 @@ class RPAGUI:
             font=('Arial', 9, 'italic'))
 
         self.tree.bind("<<TreeviewSelect>>", self.on_tree_select)
+        self.tree.bind("<Double-1>", self.on_drag_arm)
         self.tree.bind("<ButtonPress-1>", self.on_drag_start)
         self.tree.bind("<B1-Motion>", self.on_drag_motion)
         self.tree.bind("<ButtonRelease-1>", self.on_drag_release)
+        self.tree.bind("<Leave>", self.on_tree_leave)
         self.tree.bind("<Delete>", lambda e: self.delete_step())
         # 复制粘贴快捷键
         self.tree.bind("<Control-x>", lambda e: self.cut_steps())
@@ -2535,8 +2538,33 @@ class RPAGUI:
 
         build("", self.data)
 
+    # 拖拽排序
+    def on_drag_arm(self, e: tk.Event) -> None:
+        """双击步骤后武装拖拽模式，显示虚框提示可以拖动。"""
+        item = self.tree.identify_row(e.y)
+        if item:
+            info = self.tree_map.get(item)
+            if info and info.get('type') == 'step':
+                self._drag_enabled = True
+                self.tree.item(item, tags=('drag_source',))
+                self.lbl_status.config(
+                    text="\U0001f447 步骤已就绪，按住左键拖动排序", fg="orange")
+
+    def on_tree_leave(self, e: tk.Event) -> None:
+        """鼠标离开树时取消拖拽武装。"""
+        if self._drag_enabled and not self.drag_data:
+            self._drag_enabled = False
+            for item_id in self.tree.get_children(''):
+                tags = list(self.tree.item(item_id, 'tags'))
+                new_tags = [t for t in tags if t != 'drag_source']
+                self.tree.item(item_id, tags=tuple(new_tags))
+            self.lbl_status.config(text="", fg="gray")
+
     def on_drag_start(self, e: tk.Event) -> None:
-        """拖拽开始。"""
+        """拖拽开始（仅双击武装后有效）。"""
+        if not self._drag_enabled:
+            self.drag_data = None
+            return
         item = self.tree.identify_row(e.y)
         # 检测 Ctrl (0x0004) 或 Shift (0x0001) 是否按下，若是则不覆盖多选且不触发拖拽
         multi_select = bool(e.state & 0x0004) or bool(e.state & 0x0001)
@@ -2559,6 +2587,12 @@ class RPAGUI:
         """拖拽移动。"""
         if not self.drag_data:
             return
+
+        # 将拖拽源标记为拖拽状态（虚框效果）
+        try:
+            self.tree.item(self.drag_data["item"], tags=('drag_source',))
+        except tk.TclError:
+            pass
 
         # 清除所有拖拽相关标签
         for item_id in self.tree.get_children(''):
@@ -2671,7 +2705,10 @@ class RPAGUI:
         except tk.TclError:
             pass
 
+        self.drag_highlight_items = []
+
         self.drag_data = None
+        self._drag_enabled = False  # 释放后退出拖拽模式
 
         if not target_id or source_id == target_id:
             # 没有实际拖拽（点击展开/选中时也会触发），不刷新树
